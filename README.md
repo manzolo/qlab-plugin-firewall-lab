@@ -22,27 +22,27 @@ A [QLab](https://github.com/manzolo/qlab) plugin that creates two virtual machin
 ## Architecture
 
 ```
-┌─────────────────── Host ────────────────────┐
-│                                             │
-│  localhost:8180  ──┐                        │
-│  localhost:9190  ──┼── port forwarding      │
-│  localhost:3360  ──┘                        │
-│                                             │
-│  ┌──────────────────────┐  ┌─────────────┐ │
-│  │  firewall-lab-firewall│  │ firewall-lab│ │
-│  │  SSH: 2226           │  │  -attacker  │ │
-│  │                      │  │ SSH: 2227   │ │
-│  │  :80  nginx          │  │             │ │
-│  │  :9090 Python HTTP   │  │  nmap       │ │
-│  │  :3306 MariaDB       │  │  curl       │ │
-│  │  iptables / ufw      │  │  netcat     │ │
-│  │  tshark / tcpdump    │  │  tcpdump    │ │
-│  └──────────┬───────────┘  └──────┬──────┘ │
-│             │    10.0.2.2         │         │
-│             └─────────────────────┘         │
-│        attacker reaches firewall via        │
-│        10.0.2.2:8180 / :9190 / :3360       │
-└─────────────────────────────────────────────┘
+┌─────────────────── Host ─────────────────────┐
+│                                              │
+│  localhost:8180  ──┐                         │
+│  localhost:9190  ──┼── port forwarding       │
+│  localhost:3360  ──┘                         │
+│                                              │
+│  ┌───────────────────────┐  ┌─────────────┐  │
+│  │ firewall-lab-firewall │  │ firewall-lab│  │
+│  │  SSH: 2226            │  │  -attacker  │  │
+│  │                       │  │ SSH: 2227   │  │
+│  │  :80  nginx           │  │             │  │
+│  │  :9090 Python HTTP    │  │  nmap       │  │
+│  │  :3306 MariaDB        │  │  curl       │  │
+│  │  iptables / ufw       │  │  netcat     │  │
+│  │  tshark / tcpdump     │  │  tcpdump    │  │
+│  └──────────┬────────────┘  └──────┬──────┘  │
+│             │    10.0.2.2          │         │
+│             └──────────────────────┘         │
+│        attacker reaches firewall via         │
+│        10.0.2.2:8180 / :9190 / :3360         │
+└──────────────────────────────────────────────┘
 ```
 
 ## Quick Start
