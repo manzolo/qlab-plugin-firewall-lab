@@ -107,6 +107,22 @@ packages:
   - mariadb-server
   - python3
 write_files:
+  - path: /etc/profile.d/cloud-init-status.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      if command -v cloud-init >/dev/null 2>&1; then
+        status=$(cloud-init status 2>/dev/null)
+        if echo "$status" | grep -q "running"; then
+          printf '\033[1;33m'
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Cloud-init is still running..."
+          echo "  Some packages and services may not be ready yet."
+          echo "  Run 'cloud-init status --wait' to wait for completion."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          printf '\033[0m\n'
+        fi
+      fi
   - path: /etc/motd.raw
     content: |
       \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
@@ -222,6 +238,22 @@ packages:
   - iputils-ping
   - mariadb-client
 write_files:
+  - path: /etc/profile.d/cloud-init-status.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      if command -v cloud-init >/dev/null 2>&1; then
+        status=$(cloud-init status 2>/dev/null)
+        if echo "$status" | grep -q "running"; then
+          printf '\033[1;33m'
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Cloud-init is still running..."
+          echo "  Some packages and services may not be ready yet."
+          echo "  Run 'cloud-init status --wait' to wait for completion."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          printf '\033[0m\n'
+        fi
+      fi
   - path: /etc/motd.raw
     content: |
       \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
