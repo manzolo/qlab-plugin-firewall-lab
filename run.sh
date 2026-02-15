@@ -353,6 +353,17 @@ start_vm_or_fail STARTED_VMS "$OVERLAY_FIREWALL" "$CIDATA_FIREWALL" "$MEMORY" "$
     "hostfwd=tcp::0-:9090" \
     "hostfwd=tcp::0-:3306" || exit 1
 FIREWALL_SSH_PORT="$LAST_SSH_PORT"
+
+# Read the dynamically allocated service ports from .ports file
+FW_HTTP_PORT=""
+FW_COCKPIT_PORT=""
+FW_MYSQL_PORT=""
+if [[ -f "$STATE_DIR/${FIREWALL_VM}.ports" ]]; then
+    FW_HTTP_PORT=$(grep ':80$' "$STATE_DIR/${FIREWALL_VM}.ports" | head -1 | cut -d: -f2)
+    FW_COCKPIT_PORT=$(grep ':9090$' "$STATE_DIR/${FIREWALL_VM}.ports" | head -1 | cut -d: -f2)
+    FW_MYSQL_PORT=$(grep ':3306$' "$STATE_DIR/${FIREWALL_VM}.ports" | head -1 | cut -d: -f2)
+fi
+
 echo ""
 
 info "Starting $ATTACKER_VM..."
@@ -370,7 +381,13 @@ echo ""
 echo "  Firewall VM:"
 echo "    SSH:   qlab shell $FIREWALL_VM"
 echo "    Log:   qlab log $FIREWALL_VM"
+if [[ -n "$FW_HTTP_PORT" ]]; then
+echo "    HTTP:  http://localhost:${FW_HTTP_PORT}"
+echo "    Dashboard: http://localhost:${FW_COCKPIT_PORT}"
+echo "    MySQL: localhost:${FW_MYSQL_PORT}"
+else
 echo "    Services: check ports with 'qlab ports'"
+fi
 echo ""
 echo "  Attacker VM:"
 echo "    SSH:   qlab shell $ATTACKER_VM"
