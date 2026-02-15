@@ -6,11 +6,6 @@ set -euo pipefail
 PLUGIN_NAME="firewall-lab"
 FIREWALL_VM="firewall-lab-firewall"
 ATTACKER_VM="firewall-lab-attacker"
-FIREWALL_SSH_PORT=2226
-ATTACKER_SSH_PORT=2227
-HTTP_PORT=8180
-INTERNAL_PORT=9190
-DB_PORT=3360
 
 echo "============================================="
 echo "  firewall-lab: Firewall & Network Security"
@@ -18,11 +13,11 @@ echo "============================================="
 echo ""
 echo "  This lab creates two VMs:"
 echo ""
-echo "    1. $FIREWALL_VM  (SSH port $FIREWALL_SSH_PORT)"
+echo "    1. $FIREWALL_VM"
 echo "       Runs 3 services: nginx (:80), Python HTTP (:9090), MariaDB (:3306)"
 echo "       Practice iptables, ufw, tshark, tcpdump"
 echo ""
-echo "    2. $ATTACKER_VM  (SSH port $ATTACKER_SSH_PORT)"
+echo "    2. $ATTACKER_VM"
 echo "       Equipped with nmap, curl, netcat, mariadb-client"
 echo "       Probe and test the firewall VM services"
 echo ""
@@ -346,15 +341,26 @@ echo ""
 info "Step 5: Starting VMs"
 echo ""
 
-info "Starting $FIREWALL_VM (SSH port $FIREWALL_SSH_PORT)..."
-start_vm "$OVERLAY_FIREWALL" "$CIDATA_FIREWALL" "$MEMORY" "$FIREWALL_VM" "$FIREWALL_SSH_PORT" \
-    "hostfwd=tcp::${HTTP_PORT}-:80" \
-    "hostfwd=tcp::${INTERNAL_PORT}-:9090" \
-    "hostfwd=tcp::${DB_PORT}-:3306"
+# Multi-VM: resource check, cleanup trap, rollback on failure
+MEMORY_TOTAL=$(( MEMORY * 2 ))
+check_host_resources "$MEMORY_TOTAL" 2
+declare -a STARTED_VMS=()
+register_vm_cleanup STARTED_VMS
+
+info "Starting $FIREWALL_VM..."
+start_vm_or_fail STARTED_VMS "$OVERLAY_FIREWALL" "$CIDATA_FIREWALL" "$MEMORY" "$FIREWALL_VM" auto \
+    "hostfwd=tcp::0-:80" \
+    "hostfwd=tcp::0-:9090" \
+    "hostfwd=tcp::0-:3306" || exit 1
+FIREWALL_SSH_PORT="$LAST_SSH_PORT"
 echo ""
 
-info "Starting $ATTACKER_VM (SSH port $ATTACKER_SSH_PORT)..."
-start_vm "$OVERLAY_ATTACKER" "$CIDATA_ATTACKER" "$MEMORY" "$ATTACKER_VM" "$ATTACKER_SSH_PORT"
+info "Starting $ATTACKER_VM..."
+start_vm_or_fail STARTED_VMS "$OVERLAY_ATTACKER" "$CIDATA_ATTACKER" "$MEMORY" "$ATTACKER_VM" auto || exit 1
+ATTACKER_SSH_PORT="$LAST_SSH_PORT"
+
+# Successful start — disable cleanup trap
+trap - EXIT
 
 echo ""
 echo "============================================="
@@ -364,16 +370,11 @@ echo ""
 echo "  Firewall VM:"
 echo "    SSH:   qlab shell $FIREWALL_VM"
 echo "    Log:   qlab log $FIREWALL_VM"
-echo "    Port:  $FIREWALL_SSH_PORT"
-echo "    Services:"
-echo "      nginx          → http://localhost:$HTTP_PORT"
-echo "      Python HTTP    → http://localhost:$INTERNAL_PORT"
-echo "      MariaDB        → localhost:$DB_PORT"
+echo "    Services: check ports with 'qlab ports'"
 echo ""
 echo "  Attacker VM:"
 echo "    SSH:   qlab shell $ATTACKER_VM"
 echo "    Log:   qlab log $ATTACKER_VM"
-echo "    Port:  $ATTACKER_SSH_PORT"
 echo ""
 echo "  Credentials (both VMs):"
 echo "    Username: labuser"
