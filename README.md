@@ -8,30 +8,32 @@ A [QLab](https://github.com/manzolo/qlab) plugin that creates two virtual machin
 
 | VM | SSH Port | Packages | Purpose |
 |----|----------|----------|---------|
-| `firewall-lab-firewall` | 2226 | `iptables`, `ufw`, `tshark`, `tcpdump`, `nginx`, `nftables`, `mariadb-server`, `python3` | Firewall VM running 3 services |
-| `firewall-lab-attacker` | 2227 | `nmap`, `curl`, `netcat-openbsd`, `tcpdump`, `mariadb-client` | Probe and test firewall rules |
+| `firewall-lab-firewall` | dynamic | `iptables`, `ufw`, `tshark`, `tcpdump`, `nginx`, `nftables`, `mariadb-server`, `python3` | Firewall VM running 3 services |
+| `firewall-lab-attacker` | dynamic | `nmap`, `curl`, `netcat-openbsd`, `tcpdump`, `mariadb-client` | Probe and test firewall rules |
+
+> **Note:** All host ports are dynamically allocated. Use `qlab ports` to see the actual port mappings.
 
 ### Services on the Firewall VM
 
 | Service | VM Port | Host Port | Security Tier |
 |---------|---------|-----------|---------------|
-| nginx (web server) | 80 | 8180 | Public — learn to selectively allow |
-| Python HTTP (internal dashboard) | 9090 | 9190 | Internal — learn to restrict access |
-| MariaDB (database) | 3306 | 3360 | Sensitive — must always be blocked |
+| nginx (web server) | 80 | dynamic | Public — learn to selectively allow |
+| Python HTTP (internal dashboard) | 9090 | dynamic | Internal — learn to restrict access |
+| MariaDB (database) | 3306 | dynamic | Sensitive — must always be blocked |
 
 ## Architecture
 
 ```
 ┌─────────────────── Host ─────────────────────┐
 │                                              │
-│  localhost:8180  ──┐                         │
-│  localhost:9190  ──┼── port forwarding       │
-│  localhost:3360  ──┘                         │
-│                                              │
+│  localhost:<port>  ──┐                       │
+│  localhost:<port>  ──┼── port forwarding     │
+│  localhost:<port>  ──┘  (dynamic, see        │
+│                          'qlab ports')       │
 │  ┌───────────────────────┐  ┌─────────────┐  │
 │  │ firewall-lab-firewall │  │ firewall-lab│  │
-│  │  SSH: 2226            │  │  -attacker  │  │
-│  │                       │  │ SSH: 2227   │  │
+│  │  SSH: dynamic         │  │  -attacker  │  │
+│  │                       │  │ SSH: dynamic│  │
 │  │  :80  nginx           │  │             │  │
 │  │  :9090 Python HTTP    │  │  nmap       │  │
 │  │  :3306 MariaDB        │  │  curl       │  │
@@ -41,7 +43,7 @@ A [QLab](https://github.com/manzolo/qlab) plugin that creates two virtual machin
 │             │    10.0.2.2          │         │
 │             └──────────────────────┘         │
 │        attacker reaches firewall via         │
-│        10.0.2.2:8180 / :9190 / :3360         │
+│        10.0.2.2:<ports> (see 'qlab ports')   │
 └──────────────────────────────────────────────┘
 ```
 
@@ -62,6 +64,8 @@ qlab shell firewall-lab-attacker    # connect to attacker VM
 - **Password:** `labpass`
 
 ---
+
+> **Before starting:** Run `qlab ports` on the host to see the dynamically allocated ports. In the exercises below, replace `<HTTP_PORT>`, `<DASH_PORT>`, and `<DB_PORT>` with the actual ports shown by `qlab ports` for guest ports 80, 9090, and 3306 respectively.
 
 ## Exercise 1: Explore Default Rules and Verify Connectivity
 
@@ -85,12 +89,12 @@ curl http://localhost:9090
 
 ```bash
 # Test all 3 services are reachable through port forwarding
-curl http://10.0.2.2:8180          # nginx — should return HTML
-curl http://10.0.2.2:9190          # internal dashboard — should return HTML
-nc -zv 10.0.2.2 3360               # MariaDB — should connect
+curl http://10.0.2.2:<HTTP_PORT>          # nginx — should return HTML
+curl http://10.0.2.2:<DASH_PORT>          # internal dashboard — should return HTML
+nc -zv 10.0.2.2 <DB_PORT>               # MariaDB — should connect
 
 # Scan all 3 ports at once
-nmap -p 8180,9190,3360 10.0.2.2
+nmap -p <HTTP_PORT>,<DASH_PORT>,<DB_PORT> 10.0.2.2
 ```
 
 ---
@@ -111,11 +115,11 @@ sudo iptables -L -n -v
 
 ```bash
 # This should now hang/timeout
-curl --connect-timeout 5 http://10.0.2.2:8180
+curl --connect-timeout 5 http://10.0.2.2:<HTTP_PORT>
 
 # Other services should still work
-curl http://10.0.2.2:9190
-nc -zv 10.0.2.2 3360
+curl http://10.0.2.2:<DASH_PORT>
+nc -zv 10.0.2.2 <DB_PORT>
 ```
 
 **On the firewall VM — remove the rule:**
@@ -144,12 +148,12 @@ sudo iptables -L -n -v
 
 ```bash
 # Database should now be unreachable
-nc -zv -w 3 10.0.2.2 3360          # should timeout
-mysql -h 10.0.2.2 -P 3360 -u root  # should fail
+nc -zv -w 3 10.0.2.2 <DB_PORT>          # should timeout
+mysql -h 10.0.2.2 -P <DB_PORT> -u root  # should fail
 
 # Web services should still work
-curl http://10.0.2.2:8180
-curl http://10.0.2.2:9190
+curl http://10.0.2.2:<HTTP_PORT>
+curl http://10.0.2.2:<DASH_PORT>
 ```
 
 **Lesson:** Databases should never be exposed to the public. Always block database ports at the firewall level.
@@ -186,9 +190,9 @@ sudo ufw status verbose
 **On the attacker VM:**
 
 ```bash
-curl --connect-timeout 5 http://10.0.2.2:8180    # blocked
-curl http://10.0.2.2:9190                          # allowed
-nc -zv -w 3 10.0.2.2 3360                          # blocked
+curl --connect-timeout 5 http://10.0.2.2:<HTTP_PORT>    # blocked
+curl http://10.0.2.2:<DASH_PORT>                          # allowed
+nc -zv -w 3 10.0.2.2 <DB_PORT>                          # blocked
 ```
 
 **Reset ufw:**
@@ -212,9 +216,9 @@ sudo tshark -i ens3 -f "tcp port 80" -c 20
 
 ```bash
 # Generate traffic to the web server
-curl http://10.0.2.2:8180
-curl http://10.0.2.2:8180
-curl http://10.0.2.2:8180
+curl http://10.0.2.2:<HTTP_PORT>
+curl http://10.0.2.2:<HTTP_PORT>
+curl http://10.0.2.2:<HTTP_PORT>
 ```
 
 **Back on the firewall VM — observe the captured packets.**
@@ -283,10 +287,10 @@ sudo iptables -L -n -v --line-numbers
 
 ```bash
 # Test the complete ruleset
-curl http://10.0.2.2:8180                          # allowed (web)
-curl http://10.0.2.2:9190                          # allowed (internal)
-nc -zv -w 3 10.0.2.2 3360                          # blocked (database)
-nmap -p 8180,9190,3360 10.0.2.2                    # scan all ports
+curl http://10.0.2.2:<HTTP_PORT>                          # allowed (web)
+curl http://10.0.2.2:<DASH_PORT>                          # allowed (internal)
+nc -zv -w 3 10.0.2.2 <DB_PORT>                          # blocked (database)
+nmap -p <HTTP_PORT>,<DASH_PORT>,<DB_PORT> 10.0.2.2                    # scan all ports
 ```
 
 **On the firewall VM — check the logs:**
