@@ -328,11 +328,17 @@ echo ""
 
 OVERLAY_FIREWALL="$LAB_DIR/${FIREWALL_VM}-disk.qcow2"
 if [[ -f "$OVERLAY_FIREWALL" ]]; then rm -f "$OVERLAY_FIREWALL"; fi
-create_overlay "$CLOUD_IMAGE_FILE" "$OVERLAY_FIREWALL" "${QLAB_DISK_SIZE:-}"
+create_overlay "$CLOUD_IMAGE_FILE" "$OVERLAY_FIREWALL" "${QLAB_DISK_SIZE:-}" || {
+    error "Failed to create overlay disk for firewall VM."
+    exit 1
+}
 
 OVERLAY_ATTACKER="$LAB_DIR/${ATTACKER_VM}-disk.qcow2"
 if [[ -f "$OVERLAY_ATTACKER" ]]; then rm -f "$OVERLAY_ATTACKER"; fi
-create_overlay "$CLOUD_IMAGE_FILE" "$OVERLAY_ATTACKER" "${QLAB_DISK_SIZE:-}"
+create_overlay "$CLOUD_IMAGE_FILE" "$OVERLAY_ATTACKER" "${QLAB_DISK_SIZE:-}" || {
+    error "Failed to create overlay disk for attacker VM."
+    exit 1
+}
 echo ""
 
 # =============================================
