@@ -165,13 +165,13 @@ curl -s http://localhost:9090 | head -5
 
 **Why:** ufw provides a user-friendly interface to iptables. It is the default firewall tool on Ubuntu and is easier to use for common tasks.
 
-### 3.1 Enable ufw
+### 3.1 Allow SSH and enable ufw
 
 On the **firewall VM**:
 
 ```bash
+sudo ufw allow 22/tcp       # Always allow SSH BEFORE enabling!
 sudo ufw --force enable
-sudo ufw allow 22/tcp    # Always allow SSH first!
 ```
 
 ### 3.2 Set rules
