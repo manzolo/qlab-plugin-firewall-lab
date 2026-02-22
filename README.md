@@ -63,245 +63,29 @@ qlab shell firewall-lab-attacker    # connect to attacker VM
 - **Username:** `labuser`
 - **Password:** `labpass`
 
----
+## Exercises
 
-> **Before starting:** Run `qlab ports` on the host to see the dynamically allocated ports. In the exercises below, replace `<HTTP_PORT>`, `<DASH_PORT>`, and `<DB_PORT>` with the actual ports shown by `qlab ports` for guest ports 80, 9090, and 3306 respectively.
+> **New to firewalls?** See the [Step-by-Step Guide](guide.md) for complete walkthroughs with full examples and expected output.
 
-## Exercise 1: Explore Default Rules and Verify Connectivity
+| # | Exercise | What you'll do |
+|---|----------|----------------|
+| 1 | **Firewall Anatomy** | Explore services, ports, iptables defaults, and tools |
+| 2 | **iptables Rules** | Add, verify, and flush INPUT chain rules |
+| 3 | **UFW (Uncomplicated Firewall)** | Enable ufw, allow/deny ports, check status |
+| 4 | **Traffic Capture** | Use tshark/tcpdump to capture and analyze packets |
+| 5 | **Service Testing** | Test nginx, dashboard, and MariaDB content and access |
+| 6 | **Attacker Reconnaissance** | Use nmap, curl, netcat from the attacker VM |
 
-**On the firewall VM:**
+## Automated Tests
 
-```bash
-# List current iptables rules (should be empty/ACCEPT all)
-sudo iptables -L -n -v
-
-# Verify all 3 services are running
-systemctl status nginx
-systemctl status internal-dashboard
-systemctl status mariadb
-
-# Test locally
-curl http://localhost
-curl http://localhost:9090
-```
-
-**On the attacker VM:**
+An automated test suite validates the exercises against running VMs:
 
 ```bash
-# Test all 3 services are reachable through port forwarding
-curl http://10.0.2.2:<HTTP_PORT>          # nginx — should return HTML
-curl http://10.0.2.2:<DASH_PORT>          # internal dashboard — should return HTML
-nc -zv 10.0.2.2 <DB_PORT>               # MariaDB — should connect
-
-# Scan all 3 ports at once
-nmap -p <HTTP_PORT>,<DASH_PORT>,<DB_PORT> 10.0.2.2
+# Start the lab first
+qlab run firewall-lab
+# Wait ~90s for cloud-init, then run all tests
+qlab test firewall-lab
 ```
-
----
-
-## Exercise 2: Block HTTP with iptables
-
-**On the firewall VM:**
-
-```bash
-# Block incoming HTTP traffic on port 80
-sudo iptables -A INPUT -p tcp --dport 80 -j DROP
-
-# Verify the rule
-sudo iptables -L -n -v
-```
-
-**On the attacker VM:**
-
-```bash
-# This should now hang/timeout
-curl --connect-timeout 5 http://10.0.2.2:<HTTP_PORT>
-
-# Other services should still work
-curl http://10.0.2.2:<DASH_PORT>
-nc -zv 10.0.2.2 <DB_PORT>
-```
-
-**On the firewall VM — remove the rule:**
-
-```bash
-sudo iptables -D INPUT -p tcp --dport 80 -j DROP
-# Or flush all rules:
-sudo iptables -F
-```
-
----
-
-## Exercise 3: Block the Database — Never Expose a DB
-
-**On the firewall VM:**
-
-```bash
-# Block MariaDB from external access
-sudo iptables -A INPUT -p tcp --dport 3306 -j DROP
-
-# Verify the rule
-sudo iptables -L -n -v
-```
-
-**On the attacker VM:**
-
-```bash
-# Database should now be unreachable
-nc -zv -w 3 10.0.2.2 <DB_PORT>          # should timeout
-mysql -h 10.0.2.2 -P <DB_PORT> -u root  # should fail
-
-# Web services should still work
-curl http://10.0.2.2:<HTTP_PORT>
-curl http://10.0.2.2:<DASH_PORT>
-```
-
-**Lesson:** Databases should never be exposed to the public. Always block database ports at the firewall level.
-
----
-
-## Exercise 4: Use ufw Instead of iptables
-
-**On the firewall VM:**
-
-```bash
-# First, flush iptables rules
-sudo iptables -F
-
-# Enable ufw (default: deny incoming, allow outgoing)
-sudo ufw --force enable
-
-# Allow SSH (important! don't lock yourself out)
-sudo ufw allow 22/tcp
-
-# Block HTTP (web server)
-sudo ufw deny 80/tcp
-
-# Block MariaDB
-sudo ufw deny 3306/tcp
-
-# Allow internal dashboard (restricted allow)
-sudo ufw allow 9090/tcp
-
-# Check the status
-sudo ufw status verbose
-```
-
-**On the attacker VM:**
-
-```bash
-curl --connect-timeout 5 http://10.0.2.2:<HTTP_PORT>    # blocked
-curl http://10.0.2.2:<DASH_PORT>                          # allowed
-nc -zv -w 3 10.0.2.2 <DB_PORT>                          # blocked
-```
-
-**Reset ufw:**
-
-```bash
-sudo ufw --force reset
-```
-
----
-
-## Exercise 5: Capture Traffic with tshark
-
-**On the firewall VM (terminal 1):**
-
-```bash
-# Capture HTTP traffic on port 80
-sudo tshark -i ens3 -f "tcp port 80" -c 20
-```
-
-**On the attacker VM (terminal 2):**
-
-```bash
-# Generate traffic to the web server
-curl http://10.0.2.2:<HTTP_PORT>
-curl http://10.0.2.2:<HTTP_PORT>
-curl http://10.0.2.2:<HTTP_PORT>
-```
-
-**Back on the firewall VM — observe the captured packets.**
-
-Try other captures:
-
-```bash
-# Capture all traffic from the attacker
-sudo tshark -i ens3 -c 30
-
-# Capture only SYN packets (connection attempts)
-sudo tshark -i ens3 -f "tcp[tcpflags] & tcp-syn != 0" -c 10
-
-# Capture database connection attempts
-sudo tshark -i ens3 -f "tcp port 3306" -c 10
-
-# Save capture to file for later analysis
-sudo tshark -i ens3 -f "tcp port 80" -c 50 -w /tmp/capture.pcap
-sudo tshark -r /tmp/capture.pcap    # read back
-```
-
----
-
-## Exercise 6: Build a Production-Like Ruleset
-
-**On the firewall VM:**
-
-```bash
-# Flush all existing rules
-sudo iptables -F
-sudo iptables -X
-
-# Set default policies: drop everything incoming
-sudo iptables -P INPUT DROP
-sudo iptables -P FORWARD DROP
-sudo iptables -P OUTPUT ACCEPT
-
-# Allow loopback (local traffic)
-sudo iptables -A INPUT -i lo -j ACCEPT
-
-# Allow established/related connections (responses to outgoing traffic)
-sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-# Allow SSH (port 22) — keep access to the VM
-sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-
-# Allow HTTP (port 80) — public web server
-sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-
-# Allow internal dashboard (port 9090) — restricted
-# In production, you would restrict by source IP
-sudo iptables -A INPUT -p tcp --dport 9090 -j ACCEPT
-
-# Block MariaDB (port 3306) — explicitly drop and log
-sudo iptables -A INPUT -p tcp --dport 3306 -j LOG --log-prefix "BLOCKED-DB: "
-sudo iptables -A INPUT -p tcp --dport 3306 -j DROP
-
-# Log all other dropped packets
-sudo iptables -A INPUT -j LOG --log-prefix "DROPPED: " --log-level 4
-
-# Verify the complete ruleset
-sudo iptables -L -n -v --line-numbers
-```
-
-**On the attacker VM:**
-
-```bash
-# Test the complete ruleset
-curl http://10.0.2.2:<HTTP_PORT>                          # allowed (web)
-curl http://10.0.2.2:<DASH_PORT>                          # allowed (internal)
-nc -zv -w 3 10.0.2.2 <DB_PORT>                          # blocked (database)
-nmap -p <HTTP_PORT>,<DASH_PORT>,<DB_PORT> 10.0.2.2                    # scan all ports
-```
-
-**On the firewall VM — check the logs:**
-
-```bash
-# View blocked connection attempts
-sudo dmesg | grep "BLOCKED-DB"
-sudo dmesg | grep "DROPPED"
-```
-
----
 
 ## Managing VMs
 
