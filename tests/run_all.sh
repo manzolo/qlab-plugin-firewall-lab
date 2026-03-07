@@ -14,6 +14,16 @@ assert "Firewall VM reachable" ssh_firewall "echo ok"; assert "Attacker VM reach
 f_ci=$(ssh_firewall "cloud-init status 2>/dev/null || echo done") || true; assert_contains "Firewall cloud-init done" "$f_ci" "done"
 a_ci=$(ssh_attacker "cloud-init status 2>/dev/null || echo done") || true; assert_contains "Attacker cloud-init done" "$a_ci" "done"
 
+# Wait for key services to be fully active (cloud-init "done" does not guarantee
+# that all systemd units have finished their activation phase)
+log_info "Waiting for firewall services to be ready..."
+for svc in nginx mariadb internal-dashboard; do
+    for _i in 1 2 3 4 5 6; do
+        ssh_firewall "systemctl is-active --quiet $svc" 2>/dev/null && break || true
+        sleep 5
+    done
+done
+
 TOTAL_PASS=0; TOTAL_FAIL=0; TESTS_RUN=0; TESTS_SKIPPED=0; FAILED_EXERCISES=()
 run_test() { local n="$1"; local f=($TESTS_DIR/test_${n}_*.sh); [[ ! -f "${f[0]}" ]] && return; should_skip "$n" && { log_info "Skipping $n"; TESTS_SKIPPED=$((TESTS_SKIPPED+1)); return; }; local e=0; bash "${f[0]}" || e=$?; TESTS_RUN=$((TESTS_RUN+1)); if [[ "$e" -ne 0 ]]; then TOTAL_FAIL=$((TOTAL_FAIL+1)); FAILED_EXERCISES+=("$n"); else TOTAL_PASS=$((TOTAL_PASS+1)); fi; }
 
